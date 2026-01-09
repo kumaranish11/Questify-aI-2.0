@@ -33,7 +33,8 @@ const elements = {
     quizzesList: document.getElementById('quizzesList'),
     resumeQuiz: document.getElementById('resumeQuiz'),
     clearStorage: document.getElementById('clearStorage'),
-    themeBtns: document.querySelectorAll('.theme-btn')
+    themeBtns: document.querySelectorAll('.theme-btn'),
+    qNum: document.getElementById('qNum')
 };
 
 // Initialize Application
@@ -50,6 +51,7 @@ function setupEventListeners() {
     elements.confirmBtn.addEventListener('click', () => {
         elements.welcomeDialog.classList.add('hidden');
         elements.mainContainer.classList.remove('hidden');
+        localStorage.setItem('questify_welcome_shown', 'true');
     });
 
     // Question Count Slider
@@ -99,6 +101,12 @@ function setupEventListeners() {
             elements.quizzesModal.classList.remove('active');
         }
     });
+
+    // Check if welcome dialog was already shown
+    if (localStorage.getItem('questify_welcome_shown')) {
+        elements.welcomeDialog.classList.add('hidden');
+        elements.mainContainer.classList.remove('hidden');
+    }
 }
 
 async function generateNewQuiz() {
@@ -118,10 +126,30 @@ async function generateNewQuiz() {
     // Show loading state
     elements.generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
     elements.generateBtn.disabled = true;
+    elements.quizTitle.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Generating ${subject} Quiz...`;
 
     try {
-        // Generate quiz using Bytez API
-        const quiz = await api.generateQuiz(subject, numQuestions);
+        // Call our serverless function
+        const response = await fetch('/api/generate-quiz', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                subject: subject,
+                numQuestions: numQuestions
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to generate quiz');
+        }
+
+        const quiz = await response.json();
+        
+        // Update subject from API response
+        quiz.subject = subject;
         
         // Save to state
         state.currentQuiz = quiz;
@@ -134,18 +162,18 @@ async function generateNewQuiz() {
         generateLevelButtons();
         
         // Ask about saving
-        const saveQuiz = confirm('Do you want to save this quiz to resume later?');
+        const saveQuiz = confirm(`Your ${subject} quiz with ${numQuestions} questions is ready!\n\nDo you want to save this quiz to resume later?`);
         if (saveQuiz) {
             saveQuizToStorage(quiz);
         }
 
     } catch (error) {
         console.error('Error generating quiz:', error);
-        alert('Failed to generate quiz. Please try again.');
+        alert(`Failed to generate quiz: ${error.message}\n\nUsing sample questions instead.`);
         
-        // Create fallback quiz
-        const fallbackQuiz = api.createFallbackQuiz(subject, numQuestions);
-        state.currentQuiz = fallbackQuiz;
+        // Create sample quiz
+        const sampleQuiz = createSampleQuiz(subject, numQuestions);
+        state.currentQuiz = sampleQuiz;
         state.currentLevel = 1;
         state.currentQuestionIndex = 0;
         state.score = 0;
@@ -202,12 +230,18 @@ function updateQuizUI() {
         elements.prevBtn.disabled = state.currentQuestionIndex === 0;
         elements.nextBtn.disabled = state.currentQuestionIndex === totalQuestionsInLevel - 1;
         elements.submitBtn.disabled = currentQuestion.userAnswer === null;
+    } else {
+        elements.questionText.textContent = 'No questions available for this level.';
     }
 }
 
 function selectOption(optionIndex) {
+    if (!state.currentQuiz) return;
+    
     const questions = state.currentQuiz.questions[state.currentLevel];
     const currentQuestion = questions[state.currentQuestionIndex];
+    
+    if (!currentQuestion) return;
     
     // Remove selection from all options
     document.querySelectorAll('.option').forEach(opt => {
@@ -215,7 +249,10 @@ function selectOption(optionIndex) {
     });
     
     // Add selection to clicked option
-    document.querySelector(`.option[data-option="${optionIndex}"]`).classList.add('selected');
+    const selectedOption = document.querySelector(`.option[data-option="${optionIndex}"]`);
+    if (selectedOption) {
+        selectedOption.classList.add('selected');
+    }
     
     // Update question state
     currentQuestion.userAnswer = optionIndex;
@@ -226,32 +263,38 @@ function selectOption(optionIndex) {
 }
 
 function submitAnswer() {
+    if (!state.currentQuiz) return;
+    
     const questions = state.currentQuiz.questions[state.currentLevel];
     const currentQuestion = questions[state.currentQuestionIndex];
+    
+    if (!currentQuestion) return;
     
     if (currentQuestion.isCorrect) {
         state.score += 10;
         elements.score.textContent = state.score;
-        alert('Correct! ' + currentQuestion.explanation);
+        alert('✅ Correct! ' + currentQuestion.explanation);
     } else {
         const correctOption = String.fromCharCode(65 + currentQuestion.correctAnswer);
-        alert(`Incorrect. The correct answer is ${correctOption}. ${currentQuestion.explanation}`);
+        alert(`❌ Incorrect. The correct answer is ${correctOption}. ${currentQuestion.explanation}`);
     }
     
     // Move to next question if available
     if (state.currentQuestionIndex < questions.length - 1) {
         showNextQuestion();
     } else {
-        alert('Level completed! Moving to next level...');
+        alert('🎉 Level completed! Moving to next level...');
         if (state.currentLevel < state.currentQuiz.totalLevels) {
             changeLevel(state.currentLevel + 1);
         } else {
-            alert('Congratulations! You completed the entire quiz!');
+            alert('🏆 Congratulations! You completed the entire quiz!');
         }
     }
 }
 
 function showPreviousQuestion() {
+    if (!state.currentQuiz) return;
+    
     if (state.currentQuestionIndex > 0) {
         state.currentQuestionIndex--;
         updateQuizUI();
@@ -259,6 +302,8 @@ function showPreviousQuestion() {
 }
 
 function showNextQuestion() {
+    if (!state.currentQuiz) return;
+    
     const questions = state.currentQuiz.questions[state.currentLevel];
     if (state.currentQuestionIndex < questions.length - 1) {
         state.currentQuestionIndex++;
@@ -267,6 +312,8 @@ function showNextQuestion() {
 }
 
 function changeLevel(level) {
+    if (!state.currentQuiz) return;
+    
     if (level >= 1 && level <= state.currentQuiz.totalLevels) {
         state.currentLevel = level;
         state.currentQuestionIndex = 0;
@@ -302,6 +349,7 @@ function saveQuizToStorage(quiz) {
     filteredQuizzes.push(quiz);
     
     localStorage.setItem('questify_quizzes', JSON.stringify(filteredQuizzes));
+    localStorage.setItem('questify_last_quiz', quiz.id);
     loadSavedQuizzes();
 }
 
@@ -314,10 +362,14 @@ function loadSavedQuizzes() {
 
 function updateBadgeCount() {
     const badge = document.querySelector('.badge');
-    badge.textContent = state.savedQuizzes.length;
+    if (badge) {
+        badge.textContent = state.savedQuizzes.length;
+    }
 }
 
 function renderSavedQuizzesList() {
+    if (!elements.quizzesList) return;
+    
     elements.quizzesList.innerHTML = '';
     
     if (state.savedQuizzes.length === 0) {
@@ -335,7 +387,7 @@ function renderSavedQuizzesList() {
         quizCard.className = 'quiz-card';
         quizCard.innerHTML = `
             <div class="quiz-card-header">
-                <h3>${quiz.subject}</h3>
+                <h3>${quiz.subject || 'Quiz'}</h3>
                 <span class="quiz-date">${new Date(quiz.createdAt).toLocaleDateString()}</span>
             </div>
             <div class="quiz-card-body">
@@ -358,7 +410,7 @@ function renderSavedQuizzesList() {
     // Add event listeners to action buttons
     document.querySelectorAll('.load-quiz').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const quizId = parseInt(e.target.dataset.id);
+            const quizId = parseInt(e.target.closest('button').dataset.id);
             loadQuizFromStorage(quizId);
             elements.quizzesModal.classList.remove('active');
         });
@@ -396,6 +448,7 @@ function deleteQuizFromStorage(quizId) {
 
 function showSavedQuizzes() {
     elements.quizzesModal.classList.add('active');
+    renderSavedQuizzesList();
 }
 
 function resumeLastQuiz() {
@@ -410,6 +463,7 @@ function resumeLastQuiz() {
 function clearAllStorage() {
     if (confirm('Are you sure you want to clear all saved quizzes?')) {
         localStorage.removeItem('questify_quizzes');
+        localStorage.removeItem('questify_last_quiz');
         loadSavedQuizzes();
         alert('All saved quizzes cleared!');
     }
@@ -437,11 +491,126 @@ function applyTheme() {
 function checkForResumeQuiz() {
     const lastQuizId = localStorage.getItem('questify_last_quiz');
     if (lastQuizId && state.savedQuizzes.find(q => q.id === parseInt(lastQuizId))) {
-        if (confirm('Found a previous quiz. Do you want to resume?')) {
-            loadQuizFromStorage(parseInt(lastQuizId));
-        }
+        setTimeout(() => {
+            if (confirm('Found a previous quiz. Do you want to resume?')) {
+                loadQuizFromStorage(parseInt(lastQuizId));
+            }
+        }, 1000);
     }
 }
+
+function createSampleQuiz(subject, numQuestions) {
+    const levels = 25;
+    const perLevel = Math.ceil(numQuestions / levels);
+    const questions = {};
+    
+    for (let level = 1; level <= levels; level++) {
+        questions[level] = [];
+        for (let q = 0; q < perLevel; q++) {
+            const questionNum = (level - 1) * perLevel + q + 1;
+            if (questionNum > numQuestions) break;
+            
+            questions[level].push({
+                id: `q${questionNum}`,
+                level: level,
+                question: `Sample question ${questionNum} about ${subject}: What is an important concept?`,
+                options: [
+                    `Correct concept for ${subject}`,
+                    `Common misconception A`,
+                    `Common misconception B`,
+                    `Common misconception C`
+                ],
+                correctAnswer: 0,
+                explanation: `This is a sample explanation for question ${questionNum} about ${subject}.`,
+                userAnswer: null,
+                isCorrect: null
+            });
+        }
+    }
+    
+    return {
+        id: Date.now(),
+        subject: subject,
+        totalQuestions: numQuestions,
+        totalLevels: levels,
+        questionsPerLevel: perLevel,
+        createdAt: new Date().toISOString(),
+        questions: questions
+    };
+}
+
+// Add CSS for quiz cards in modal
+const style = document.createElement('style');
+style.textContent = `
+    .quiz-card {
+        background: var(--surface);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        transition: var(--transition);
+    }
+    
+    .quiz-card:hover {
+        box-shadow: var(--shadow);
+        transform: translateY(-2px);
+    }
+    
+    .quiz-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .quiz-card-header h3 {
+        margin: 0;
+        color: var(--text-primary);
+    }
+    
+    .quiz-date {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    
+    .quiz-card-body {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+    
+    .quiz-card-body p {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .quiz-card-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .action-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        background: var(--background);
+        color: var(--text-primary);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: var(--transition);
+        font-size: 0.9rem;
+    }
+    
+    .action-btn:hover {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+    }
+`;
+document.head.appendChild(style);
 
 // Start the application
 document.addEventListener('DOMContentLoaded', init);
