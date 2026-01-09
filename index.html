@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Questify AI - Smart Quiz Platform</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Welcome Dialog -->
+    <div id="welcomeDialog" class="dialog-overlay">
+        <div class="dialog-content">
+            <div class="heart-animation">❤️</div>
+            <h1>Welcome to <span class="highlight">Questify AI</span></h1>
+            <div class="dialog-message">
+                <p>Advanced AI-Powered Quiz Platform</p>
+                <div class="creator">Created with ❤️ by ANISH</div>
+            </div>
+            <button id="confirmBtn" class="confirm-btn">
+                <i class="fas fa-rocket"></i> Get Started
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-brain"></i>
+                <h1>Questify<span class="ai-text">AI</span></h1>
+            </div>
+            <div class="header-controls">
+                <div class="theme-switcher">
+                    <button class="theme-btn active" data-theme="light">
+                        <i class="fas fa-sun"></i>
+                    </button>
+                    <button class="theme-btn" data-theme="dark">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button class="theme-btn" data-theme="nature">
+                        <i class="fas fa-leaf"></i>
+                    </button>
+                </div>
+                <button id="savedQuizzesBtn" class="icon-btn">
+                    <i class="fas fa-history"></i>
+                    <span class="badge">0</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Panel - Quiz Generator -->
+            <section class="panel left-panel">
+                <div class="card">
+                    <h2><i class="fas fa-robot"></i> AI Quiz Generator</h2>
+                    
+                    <div class="form-group">
+                        <label for="subject"><i class="fas fa-book"></i> Subject</label>
+                        <input type="text" id="subject" placeholder="e.g., JavaScript, Science, History...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="questionCount"><i class="fas fa-question-circle"></i> Number of Questions</label>
+                        <div class="range-container">
+                            <input type="range" id="questionCount" min="150" max="250" value="200">
+                            <span id="countValue">200</span>
+                        </div>
+                        <div class="range-labels">
+                            <span>150</span>
+                            <span>200</span>
+                            <span>250</span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-layer-group"></i> Level System</label>
+                        <div class="level-info">
+                            <p>Total Levels: <strong>25</strong></p>
+                            <p>Questions per Level: <strong>10</strong></p>
+                            <p>Total Questions: <strong id="totalQuestions">200</strong></p>
+                        </div>
+                    </div>
+                    
+                    <button id="generateBtn" class="generate-btn">
+                        <i class="fas fa-magic"></i> Generate Quiz
+                    </button>
+                    
+                    <div class="api-status">
+                        <span class="status-dot active"></span>
+                        <span>Bytez API Connected (GPT-4o)</span>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="card quick-actions">
+                    <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+                    <div class="action-buttons">
+                        <button id="resumeQuiz" class="action-btn">
+                            <i class="fas fa-play"></i> Resume Quiz
+                        </button>
+                        <button id="clearStorage" class="action-btn">
+                            <i class="fas fa-trash"></i> Clear All
+                        </button>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Right Panel - Quiz Display -->
+            <section class="panel right-panel">
+                <div class="quiz-header">
+                    <h2 id="quizTitle"><i class="fas fa-spinner fa-spin"></i> Ready to Generate</h2>
+                    <div class="quiz-meta">
+                        <span class="meta-item">
+                            <i class="fas fa-list-ol"></i>
+                            Level: <span id="currentLevel">-</span>/25
+                        </span>
+                        <span class="meta-item">
+                            <i class="fas fa-check-circle"></i>
+                            Score: <span id="score">0</span>
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Question Container -->
+                <div class="question-container">
+                    <div class="question-card" id="questionCard">
+                        <div class="question-number">
+                            Question <span id="qNum">1</span>/10
+                        </div>
+                        
+                        <div class="question-text" id="questionText">
+                            Your AI-generated questions will appear here. Click "Generate Quiz" to start!
+                        </div>
+                        
+                        <!-- Options Container -->
+                        <div class="options-container" id="optionsContainer">
+                            <div class="option" data-option="A">
+                                <span class="option-label">A</span>
+                                <span class="option-text">Loading options...</span>
+                            </div>
+                            <!-- Options will be populated dynamically -->
+                        </div>
+                        
+                        <div class="quiz-controls">
+                            <button id="prevBtn" class="control-btn" disabled>
+                                <i class="fas fa-arrow-left"></i> Previous
+                            </button>
+                            <button id="nextBtn" class="control-btn">
+                                Next <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button id="submitBtn" class="control-btn submit-btn" disabled>
+                                <i class="fas fa-paper-plane"></i> Submit Answer
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="progress-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    
+                    <!-- Level Navigation -->
+                    <div class="level-navigation">
+                        <h4><i class="fas fa-sitemap"></i> Level Navigation</h4>
+                        <div class="level-buttons" id="levelButtons">
+                            <!-- Level buttons will be generated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Saved Quizzes Modal -->
+    <div id="quizzesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-history"></i> Saved Quizzes</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="quizzesList">
+                <!-- Saved quizzes will appear here -->
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <p>No saved quizzes yet</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+</body>
+  </html>
